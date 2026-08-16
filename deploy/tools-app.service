@@ -1,0 +1,20 @@
+[Unit]
+Description=tools.martuni.de Toolbox-Server (Node)
+After=network.target
+
+[Service]
+Type=simple
+User=librechat
+WorkingDirectory=/home/librechat/toolbox
+Environment=PORT=8341
+# TOOLS_KEY (Schlüssel fürs Anlegen von Kurzlinks) steht in .env (nicht im Repo)
+EnvironmentFile=/home/librechat/toolbox/.env
+ExecStart=/home/librechat/.local/bin/node /home/librechat/toolbox/server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

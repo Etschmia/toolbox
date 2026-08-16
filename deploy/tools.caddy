@@ -1,0 +1,56 @@
+# tools.martuni.de — Toolbox (Repo: /home/librechat/toolbox)
+# Statisches Frontend aus public/ + design/; API, Geheimnis-Links und
+# Kurzlink-Weiterleitungen gehen auf den Node-Dienst (tools-app.service, 8341).
+tools.martuni.de {
+	import noscan
+	encode zstd gzip
+	root * /home/librechat/toolbox/public
+
+	header {
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8341
+	}
+
+	handle /design/* {
+		root * /home/librechat/toolbox
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	# Geheimnis-Links /s/<id> -> open.html (Schlüssel steht im #Fragment, kommt nie hier an)
+	handle /s/* {
+		rewrite * /open.html
+		header Cache-Control "no-store"
+		file_server
+	}
+
+	# Kurzlinks: /<3-32 Zeichen> ohne passende Datei -> Weiterleitung durch den Node-Dienst
+	@short {
+		path_regexp ^/[A-Za-z0-9_-]{3,32}$
+		not file {path} {path}.html
+	}
+	handle @short {
+		reverse_proxy 127.0.0.1:8341
+	}
+
+	# Frontend: /qr -> qr.html usw.
+	handle {
+		try_files {path} {path}.html
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/tools.access.log {
+			roll_size 10mb
+			roll_keep 10
+			roll_keep_for 90d
+		}
+		format json
+	}
+}
