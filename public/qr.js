@@ -1,4 +1,4 @@
-/* QR-Code-Generator — rein clientseitig (vendor/qrcode.js, Kazuhiko Arase, MIT). */
+/* QR-Code-Generator — rein clientseitig (lib/qrcode.js, Kazuhiko Arase, MIT). */
 'use strict';
 
 buildTopbar('QR-Code');

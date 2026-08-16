@@ -30,7 +30,7 @@ Link-Formate: Geheimnisse `/s/<12 Zeichen>#<key>`, Kurzlinks `/<3–32 Zeichen>`
 - `server.js` — Node ≥ 20 ohne Abhängigkeiten, Port 8341. API + Kurzlink-Redirects,
   lokal auch statischer Server. Rate-Limit fürs Anlegen (60/h pro IP), Aufräumen alle 15 min.
 - `public/` — Seiten `index`, `qr`, `secret`, `open` (`/s/*`), `short`;
-  `common.js` (Topbar/Theme/Toast/Clipboard), `crypto.js`, `vendor/qrcode.js`
+  `common.js` (Topbar/Theme/Toast/Clipboard), `crypto.js`, `lib/qrcode.js`
   (Kazuhiko Arase, MIT).
 - `design/` — Kopie der Depot-Tokens (Quelle: `notes/design`).
 - `.env` — `TOOLS_KEY=…` (nicht im Repo; wird von der systemd-Unit geladen).
