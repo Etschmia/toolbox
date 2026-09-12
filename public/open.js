@@ -1,7 +1,7 @@
 /* Geheimnis öffnen: /s/<id>#<key> */
 'use strict';
 
-buildTopbar('Geheimnis');
+buildTopbar('nav.secret');
 const $ = (id) => document.getElementById(id);
 const id = (location.pathname.match(/^\/s\/([A-Za-z0-9]{12})$/) || [])[1];
 const fragment = location.hash.slice(1);
@@ -15,7 +15,23 @@ function stage(name) {
 function showErr(msg) { const e = $('err'); e.textContent = msg; e.hidden = !msg; }
 
 function fristText(hours) {
-  return hours < 24 ? `${hours} Stunde${hours === 1 ? '' : 'n'}` : `${hours / 24} Tag${hours === 24 ? '' : 'e'}`;
+  return hours < 24 ? tn('hours', hours) : tn('days', hours / 24);
+}
+
+function confirmNote() {
+  const note = $('confirm-note');
+  if (meta.mode === 'once') note.innerHTML = `${ICONS.warn}<span>${t('open.onceNote')}</span>`;
+  else if (meta.opened) note.innerHTML = `${ICONS.info}<span>${t('open.openedNote', { date: fmtDateTime(meta.expiresAt) })}</span>`;
+  else note.innerHTML = `${ICONS.warn}<span>${t('open.deadlineNote', { span: fristText(meta.hours) })}</span>`;
+}
+
+let shown = null;   // Antwort von /open, sobald angezeigt (für den Hinweistext)
+let burned = false;
+function showNote() {
+  const note = $('show-note');
+  if (burned) note.innerHTML = `${ICONS.flame}<span>${t('open.burnedShort')}</span>`;
+  else if (shown.mode === 'once') note.innerHTML = `${ICONS.flame}<span>${t('open.burnedNote')}</span>`;
+  else { note.innerHTML = `${ICONS.info}<span>${t('open.readableUntil', { date: fmtDateTime(shown.expiresAt) })}</span>`; tick(shown.expiresAt); }
 }
 
 async function init() {
@@ -24,14 +40,7 @@ async function init() {
   try { r = await fetch('/api/secret/' + id, { cache: 'no-store' }); } catch (e) { return stage('gone'); }
   if (!r.ok) return stage('gone');
   meta = await r.json();
-  const note = $('confirm-note');
-  if (meta.mode === 'once') {
-    note.innerHTML = `${ICONS.warn}<span><b>Nur einmal lesbar.</b> Sobald du auf „Anzeigen" klickst, wird das Geheimnis vom Server gelöscht. Danach kann es niemand mehr öffnen — auch du nicht. Bereit?</span>`;
-  } else if (meta.opened) {
-    note.innerHTML = `${ICONS.info}<span>Dieses Geheimnis wurde bereits geöffnet und ist noch bis <b>${fmtDateTime(meta.expiresAt)}</b> lesbar.</span>`;
-  } else {
-    note.innerHTML = `${ICONS.warn}<span><b>Frist startet beim Öffnen.</b> Ab dem ersten Anzeigen bleibt das Geheimnis ${fristText(meta.hours)} lesbar, danach wird es gelöscht.</span>`;
-  }
+  confirmNote();
   $('pass-field').hidden = !meta.pass;
   stage('confirm');
   if (meta.pass) $('pass').focus(); else $('btn-open').focus();
@@ -42,7 +51,7 @@ let cached = null;   // Chiffrat nach dem Abruf (für weitere Passphrase-Versuch
 $('btn-open').addEventListener('click', async () => {
   showErr('');
   const pass = $('pass').value;
-  if (meta.pass && !pass) return showErr('Bitte die Passphrase eingeben.');
+  if (meta.pass && !pass) return showErr(t('open.needPass'));
   const btn = $('btn-open');
   btn.disabled = true;
   try {
@@ -56,14 +65,12 @@ $('btn-open').addEventListener('click', async () => {
     } catch (e) {
       // Bei "once" ist das Chiffrat serverseitig schon weg — es lebt jetzt nur noch
       // in `cached`; deshalb Seite nicht neu laden, sondern erneut versuchen lassen.
-      showErr(cached.mode === 'once'
-        ? 'Entschlüsselung fehlgeschlagen — Passphrase falsch? Bitte erneut versuchen und diese Seite dabei nicht neu laden.'
-        : 'Entschlüsselung fehlgeschlagen — Passphrase falsch?');
+      showErr(t(cached.mode === 'once' ? 'open.decryptFailOnce' : 'open.decryptFail'));
       return;
     }
     reveal(cached);
   } catch (e) {
-    showErr('Fehler: ' + (e.message || e));
+    showErr(t('open.err', { msg: e.message || e }));
   } finally {
     btn.disabled = false;
   }
@@ -71,13 +78,10 @@ $('btn-open').addEventListener('click', async () => {
 
 function reveal(j) {
   $('secret').textContent = plain;
-  const note = $('show-note');
-  if (j.mode === 'once') {
-    note.innerHTML = `${ICONS.flame}<span>Das Geheimnis wurde vom Server gelöscht. Es existiert jetzt nur noch hier auf deinem Bildschirm.</span>`;
-  } else {
-    note.innerHTML = `${ICONS.info}<span>Lesbar bis <b>${fmtDateTime(j.expiresAt)}</b> (<span class="countdown" id="cd"></span>). Danach wird es gelöscht.</span>`;
+  shown = j;
+  showNote();
+  if (j.mode !== 'once') {
     $('btn-burn').hidden = false;
-    tick(j.expiresAt);
     timer = setInterval(() => tick(j.expiresAt), 1000);
   }
   stage('show');
@@ -91,17 +95,23 @@ function tick(expiresAt) {
   const h = Math.floor(s / 3600); s -= h * 3600;
   const m = Math.floor(s / 60); s -= m * 60;
   const cd = $('cd');
-  if (cd) cd.textContent = `noch ${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  if (cd) cd.textContent = t('open.remaining', { time: `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` });
   if (expiresAt <= Date.now()) { clearInterval(timer); }
 }
 
-$('btn-copy').addEventListener('click', () => copyText(plain, 'Kopiert'));
+$('btn-copy').addEventListener('click', () => copyText(plain));
 $('btn-burn').addEventListener('click', async () => {
   await fetch('/api/secret/' + id, { method: 'DELETE' });
-  toast('Vernichtet');
+  toast(t('secret.burned'));
   $('btn-burn').disabled = true;
   clearInterval(timer);
-  $('show-note').innerHTML = `${ICONS.flame}<span>Vom Server gelöscht. Existiert nur noch hier auf deinem Bildschirm.</span>`;
+  burned = true;
+  showNote();
+});
+
+document.addEventListener('langchange', () => {
+  if (meta && !$('stage-confirm').hidden) confirmNote();
+  if (shown && !$('stage-show').hidden) showNote();
 });
 $('pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-open').click(); });
 

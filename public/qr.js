@@ -1,7 +1,7 @@
 /* QR-Code-Generator — rein clientseitig (lib/qrcode.js, Kazuhiko Arase, MIT). */
 'use strict';
 
-buildTopbar('QR erstellen');
+buildTopbar('nav.qr');
 qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 
 const $ = (id) => document.getElementById(id);
@@ -89,7 +89,7 @@ function render() {
     current = null;
     canvas.width = canvas.height = 256;
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 256, 256);
-    $('meta').textContent = 'Gib etwas ein …';
+    $('meta').textContent = t('qr.empty');
     btns.forEach((b) => b.disabled = true);
     return;
   }
@@ -97,14 +97,14 @@ function render() {
   let qr;
   try { qr = makeQr(text, ecl); } catch (e) {
     current = null;
-    $('meta').textContent = 'Zu lang für einen QR-Code (' + text.length + ' Zeichen)';
+    $('meta').textContent = t('qr.tooLong', { n: text.length });
     btns.forEach((b) => b.disabled = true);
     return;
   }
   current = { qr, text };
   drawToCanvas(qr, canvas, 512, Number($('margin').value));
   const n = qr.getModuleCount();
-  $('meta').textContent = `Version ${(n - 17) / 4} · ${n}×${n} Module · ${text.length} Zeichen · Korrektur ${ecl}`;
+  $('meta').textContent = t('qr.meta', { v: (n - 17) / 4, n, len: text.length, ecl });
   btns.forEach((b) => b.disabled = false);
 }
 
@@ -134,10 +134,10 @@ $('btn-copy-img').addEventListener('click', async () => {
     // in der Nutzeraktion passiert — deshalb kein await vor dem write.
     const item = new ClipboardItem({ 'image/png': canvasBlob(exportCanvas()) });
     await navigator.clipboard.write([item]);
-    toast('Bild in die Zwischenablage kopiert');
+    toast(t('qr.imgCopied'));
   } catch (e) {
     console.warn(e);
-    toast('Bild kopieren nicht möglich — nutze PNG');
+    toast(t('qr.imgCopyFail'));
   }
 });
 $('btn-png').addEventListener('click', async () => {
@@ -148,7 +148,7 @@ $('btn-svg').addEventListener('click', () => {
   if (!current) return;
   download(new Blob([toSvg(current.qr, Number($('margin').value))], { type: 'image/svg+xml' }), fileStem() + '.svg');
 });
-$('btn-copy-text').addEventListener('click', () => current && copyText(current.text, 'Text kopiert'));
+$('btn-copy-text').addEventListener('click', () => current && copyText(current.text, t('qr.textCopied')));
 
 /* --- Verdrahtung --- */
 document.querySelectorAll('input[name=kind]').forEach((r) => r.addEventListener('change', () => {
@@ -166,3 +166,4 @@ $('margin').addEventListener('input', () => $('margin-out').textContent = $('mar
 const pre = new URLSearchParams(location.search).get('text');
 if (pre) $('text').value = pre;
 render();
+document.addEventListener('langchange', render);

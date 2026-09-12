@@ -2,7 +2,7 @@
    sonst lib/jsQR.js (Cosmo Wolfe, Apache-2.0). Quellen: Kamera, Datei, Einfügen, Drag & Drop. */
 'use strict';
 
-buildTopbar('QR scannen');
+buildTopbar('nav.scan');
 
 const $ = (id) => document.getElementById(id);
 const video = $('video');
@@ -39,9 +39,10 @@ async function initDecoder() {
     } catch (e) { /* weiter zum Fallback */ }
   }
   if (!engine) { await loadScript('/lib/jsQR.js?v=1'); engine = 'jsqr'; }
-  $('engine').textContent = engine === 'native'
-    ? 'Erkennung: Browser-eigener Decoder.'
-    : 'Erkennung: jsQR (lokal im Browser).';
+  showEngine();
+}
+function showEngine() {
+  if (engine) $('engine').textContent = t(engine === 'native' ? 'scan.engineNative' : 'scan.engineJsqr');
 }
 
 /* Quelle (Video/Bitmap/Bild) auf die Arbeits-Canvas zeichnen und dekodieren. */
@@ -62,9 +63,11 @@ async function decodeSource(src, sw, sh, maxW) {
 /* ---------- Kamera ---------- */
 function setStatus(msg) { $('vf-status').textContent = msg || ''; $('vf-status').hidden = !msg; }
 
-function showIdle(btnLabel, hint) {
+let idleBtnKey = 'scan.start';
+function showIdle(btnKey, hint) {
+  idleBtnKey = btnKey;
   $('vf-idle').hidden = false;
-  $('btn-start').textContent = btnLabel;
+  $('btn-start').textContent = t(btnKey);
   $('vf-idle-hint').textContent = hint || '';
   $('btn-stop').disabled = true;
   setStatus('');
@@ -85,7 +88,7 @@ async function listCameras() {
   try { devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput'); } catch (e) { /* egal */ }
   const sel = $('camera');
   sel.innerHTML = '';
-  devs.forEach((d, i) => sel.append(el('option', { value: d.deviceId }, d.label || `Kamera ${i + 1}`)));
+  devs.forEach((d, i) => sel.append(el('option', { value: d.deviceId }, d.label || t('scan.camN', { n: i + 1 }))));
   sel.hidden = devs.length < 2;
   const cur = track && track.getSettings().deviceId;
   if (cur) sel.value = cur;
@@ -95,24 +98,18 @@ async function startCamera(deviceId) {
   stopCamera();
   $('vf-idle').hidden = true;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showIdle('Kamera starten', window.isSecureContext
-      ? 'Dieser Browser bietet keinen Kamerazugriff. Bild einfügen oder auswählen funktioniert trotzdem.'
-      : 'Kamerazugriff geht nur über HTTPS. Bild einfügen oder auswählen funktioniert trotzdem.');
+    showIdle('scan.start', t(window.isSecureContext ? 'scan.noCamApi' : 'scan.noHttps'));
     return;
   }
-  setStatus('Kamera wird gestartet …');
+  setStatus(t('scan.starting'));
   const vid = { width: { ideal: 1280 }, height: { ideal: 720 } };
   if (deviceId) vid.deviceId = { exact: deviceId }; else vid.facingMode = 'environment';
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: vid, audio: false });
   } catch (e) {
     if (deviceId && e.name === 'OverconstrainedError') { localStorage.removeItem(LS_CAM); return startCamera(); }
-    const msgs = {
-      NotAllowedError: 'Kamerazugriff wurde abgelehnt. In den Browser-Einstellungen für diese Seite erlauben, dann erneut starten.',
-      NotFoundError: 'Keine Kamera gefunden. Bild einfügen oder auswählen funktioniert trotzdem.',
-      NotReadableError: 'Die Kamera wird gerade von einer anderen App benutzt.',
-    };
-    showIdle('Kamera starten', msgs[e.name] || ('Kamera konnte nicht gestartet werden (' + e.name + ').'));
+    const msgs = { NotAllowedError: 'scan.denied', NotFoundError: 'scan.noCam', NotReadableError: 'scan.busy' };
+    showIdle('scan.start', msgs[e.name] ? t(msgs[e.name]) : t('scan.failed', { name: e.name }));
     return;
   }
   track = stream.getVideoTracks()[0];
@@ -138,7 +135,7 @@ async function scanLoop() {
   if (video.readyState >= 2 && video.videoWidth) {
     try {
       const text = await decodeSource(video, video.videoWidth, video.videoHeight, engine === 'native' ? 1280 : 640);
-      if (text && scanning) { onHit(text, 'Kamera'); return; }
+      if (text && scanning) { onHit(text, 'scan.srcCamera'); return; }
     } catch (e) { console.warn(e); }
   }
   loopTimer = setTimeout(scanLoop, engine === 'native' ? 100 : 140);
@@ -146,17 +143,17 @@ async function scanLoop() {
 
 function onHit(text, source) {
   stopCamera();
-  showIdle('Weiter scannen', '');
+  showIdle('scan.again', '');
   if (navigator.vibrate) navigator.vibrate(60);
   showResult(text, Date.now(), true);
-  toast('Code erkannt' + (source ? ' (' + source + ')' : ''));
+  toast(t('scan.hit') + (source ? ' (' + t(source) + ')' : ''));
 }
 
 /* ---------- Bilder (Datei, Einfügen, Drop) ---------- */
 async function scanBlob(blob, source) {
-  if (!blob || !blob.type.startsWith('image/')) { toast('Das ist kein Bild'); return; }
+  if (!blob || !blob.type.startsWith('image/')) { toast(t('scan.notImage')); return; }
   let bmp;
-  try { bmp = await createImageBitmap(blob); } catch (e) { toast('Bild konnte nicht gelesen werden'); return; }
+  try { bmp = await createImageBitmap(blob); } catch (e) { toast(t('scan.unreadable')); return; }
   const wasLive = scanning;
   scanning = false; clearTimeout(loopTimer);
   let text = null;
@@ -168,25 +165,25 @@ async function scanBlob(blob, source) {
   bmp.close && bmp.close();
   if (text) {
     stopCamera();
-    showIdle('Weiter scannen', '');
+    showIdle('scan.again', '');
     showResult(text, Date.now(), true);
-    toast('Code erkannt (' + source + ')');
+    toast(t('scan.hit') + ' (' + t(source) + ')');
   } else {
-    toast('Kein QR-Code im Bild gefunden');
+    toast(t('scan.notFound'));
     if (wasLive) { scanning = true; scanLoop(); }
   }
 }
 
 $('file').addEventListener('change', () => {
   const f = $('file').files[0];
-  if (f) scanBlob(f, 'Datei');
+  if (f) scanBlob(f, 'scan.srcFile');
   $('file').value = '';
 });
 
 document.addEventListener('paste', (ev) => {
   const items = [...(ev.clipboardData ? ev.clipboardData.items : [])];
   const img = items.find((i) => i.type.startsWith('image/'));
-  if (img) { ev.preventDefault(); scanBlob(img.getAsFile(), 'Zwischenablage'); }
+  if (img) { ev.preventDefault(); scanBlob(img.getAsFile(), 'scan.srcClipboard'); }
 });
 
 document.addEventListener('dragover', (ev) => { ev.preventDefault(); document.body.classList.add('dragging'); });
@@ -194,7 +191,7 @@ document.addEventListener('dragleave', (ev) => { if (!ev.relatedTarget) document
 document.addEventListener('drop', (ev) => {
   ev.preventDefault(); document.body.classList.remove('dragging');
   const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-  if (f) scanBlob(f, 'Datei');
+  if (f) scanBlob(f, 'scan.srcFile');
 });
 
 /* ---------- Inhalt interpretieren ---------- */
@@ -251,10 +248,12 @@ function fmtIcsDate(s) {
   if (!s) return '';
   const m = s.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/);
   if (!m) return s;
-  return `${m[3]}.${m[2]}.${m[1]}` + (m[4] ? ` ${m[4]}:${m[5]}` : '');
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] || 0), Number(m[5] || 0));
+  return d.toLocaleString(I18N.locale, m[4] ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' });
 }
 
-/* Liefert { type, fields: [[label, value, mono?]], actions: [{label, href?, download?, blob?, copy?, primary?, external?}], note? } */
+/* Liefert { type, fields: [[label, value, mono?]], actions: [{label, href?, download?, blob?, copy?, primary?, external?}], note?, warn? } */
+const T = I18N.t; // in interpret() heißt der Rohtext `t`
 function interpret(text) {
   const t = text.trim();
   const schemeMatch = t.match(/^([a-z][a-z0-9+.-]{1,30}):/i);
@@ -262,13 +261,13 @@ function interpret(text) {
 
   if (scheme === 'http' || scheme === 'https') {
     let u; try { u = new URL(t); } catch (e) { u = null; }
-    const fields = u ? [['Adresse', u.href, true]] : [['Adresse', t, true]];
-    let note = '';
-    if (u && u.username) note = 'Achtung: Die Adresse enthält einen Benutzernamen vor dem @ — typisch für Phishing.';
-    else if (u && /xn--/.test(u.hostname)) note = 'Achtung: Der Hostname nutzt Sonderzeichen (Punycode) — genau hinsehen.';
-    return { type: 'Link', fields, note, actions: [
-      { label: 'Öffnen', href: t, external: true, primary: true },
-      { label: 'Link kopieren', copy: t },
+    const fields = [[T('f.address'), u ? u.href : t, true]];
+    let note = '', warn = false;
+    if (u && u.username) { note = T('n.phishing'); warn = true; }
+    else if (u && /xn--/.test(u.hostname)) { note = T('n.punycode'); warn = true; }
+    return { type: T('type.link'), fields, note, warn, actions: [
+      { label: T('a.open'), href: t, external: true, primary: true },
+      { label: T('a.copyLink'), copy: t },
     ] };
   }
 
@@ -278,49 +277,48 @@ function interpret(text) {
     const label = u ? decodeURIComponent(u.pathname.replace(/^\/+/, '')) : '';
     const [issuerFromLabel, account] = label.includes(':') ? label.split(/:(.*)/) : ['', label];
     const fields = [
-      ['Dienst', q.issuer || issuerFromLabel || '—'],
-      ['Konto', account || '—'],
-      ['Typ', (u ? u.host : '').toUpperCase() || 'TOTP'],
+      [T('f.service'), q.issuer || issuerFromLabel || '—'],
+      [T('f.account'), account || '—'],
+      [T('f.type'), (u ? u.host : '').toUpperCase() || 'TOTP'],
     ];
-    return { type: 'Einmalpasswort (2FA)', fields,
-      note: 'Der geheime Schlüssel bleibt hier im Browser. „In Passwort-App öffnen" übergibt ihn an Apple Passwörter / Schlüsselbund, 1Password, Bitwarden, Authenticator o. ä.',
+    return { type: T('type.otp'), fields,
+      note: T('n.otp'),
       actions: [
-        { label: 'In Passwort-App öffnen', href: t, primary: true },
-        { label: 'Schlüssel kopieren', copy: q.secret || '' },
-        { label: 'otpauth-URI kopieren', copy: t },
+        { label: T('a.openPassApp'), href: t, primary: true },
+        { label: T('a.copyKey'), copy: q.secret || '' },
+        { label: T('a.copyOtp'), copy: t },
       ] };
   }
   if (scheme === 'otpauth-migration') {
-    return { type: 'Authenticator-Export', fields: [['Inhalt', 'Google-Authenticator-Übertragung (mehrere Konten)']],
-      actions: [{ label: 'In Authenticator öffnen', href: t, primary: true }, { label: 'URI kopieren', copy: t }] };
+    return { type: T('type.authExport'), fields: [[T('f.content'), T('f.migration')]],
+      actions: [{ label: T('a.openAuth'), href: t, primary: true }, { label: T('a.copyUri'), copy: t }] };
   }
 
   if (/^WIFI:/i.test(t)) {
     const f = parseWifi(t);
-    const typ = { WPA: 'WPA/WPA2/WPA3', WEP: 'WEP', nopass: 'offen', '': 'offen' }[f.T || ''] || f.T;
-    const fields = [['Netz (SSID)', f.S || '—'], ['Verschlüsselung', typ]];
-    if (f.P) fields.push(['Passwort', f.P, true]);
-    if (/true/i.test(f.H || '')) fields.push(['Verstecktes Netz', 'ja']);
+    const typ = { WPA: 'WPA/WPA2/WPA3', WEP: 'WEP', nopass: T('f.open'), '': T('f.open') }[f.T || ''] || f.T;
+    const fields = [[T('f.ssid'), f.S || '—'], [T('f.enc'), typ]];
+    if (f.P) fields.push([T('f.password'), f.P, true]);
+    if (/true/i.test(f.H || '')) fields.push([T('f.hiddenNet'), T('f.yes')]);
     const actions = [];
-    if (f.P) actions.push({ label: 'Passwort kopieren', copy: f.P, primary: true });
-    actions.push({ label: 'SSID kopieren', copy: f.S || '' });
-    return { type: 'WLAN-Zugang', fields, actions,
-      note: isApple ? 'Auf dem Mac: WLAN-Menü → Netz wählen → Passwort einfügen. iPhone/iPad erkennen solche Codes direkt in der Kamera-App.' : '' };
+    if (f.P) actions.push({ label: T('a.copyPass'), copy: f.P, primary: true });
+    actions.push({ label: T('a.copySsid'), copy: f.S || '' });
+    return { type: T('type.wifi'), fields, actions, note: isApple ? T('n.wifiMac') : '' };
   }
 
   if (scheme === 'bitcoin' || scheme === 'lightning' || scheme === 'ethereum' || scheme === 'litecoin' || scheme === 'monero') {
     const rest = t.slice(scheme.length + 1);
     const [addr, query] = rest.split(/\?(.*)/);
     const q = parseQuery(query || '');
-    const fields = [['Adresse', addr, true]];
-    if (q.amount) fields.push(['Betrag', q.amount + (scheme === 'bitcoin' ? ' BTC' : ''), true]);
-    if (q.label) fields.push(['Bezeichnung', q.label]);
-    if (q.message) fields.push(['Nachricht', q.message]);
+    const fields = [[T('f.address'), addr, true]];
+    if (q.amount) fields.push([T('f.amount'), q.amount + (scheme === 'bitcoin' ? ' BTC' : ''), true]);
+    if (q.label) fields.push([T('f.label'), q.label]);
+    if (q.message) fields.push([T('f.message'), q.message]);
     const name = scheme.charAt(0).toUpperCase() + scheme.slice(1);
-    return { type: name + '-Zahlung', fields, actions: [
-      { label: 'In Wallet öffnen', href: t, primary: true },
-      { label: 'Adresse kopieren', copy: addr },
-      { label: 'URI kopieren', copy: t },
+    return { type: T('type.payment', { name }), fields, actions: [
+      { label: T('a.openWallet'), href: t, primary: true },
+      { label: T('a.copyAddr'), copy: addr },
+      { label: T('a.copyUri'), copy: t },
     ] };
   }
 
@@ -328,34 +326,34 @@ function interpret(text) {
     let u; try { u = new URL(t); } catch (e) { u = null; }
     const to = u ? decodeURIComponent(u.pathname) : t.slice(7);
     const q = u ? parseQuery(u.search) : {};
-    const fields = [['An', to, true]];
-    if (q.subject) fields.push(['Betreff', q.subject]);
-    if (q.body) fields.push(['Text', q.body]);
-    return { type: 'E-Mail', fields, actions: [
-      { label: 'E-Mail schreiben', href: t, primary: true },
-      { label: 'Adresse kopieren', copy: to },
+    const fields = [[T('f.to'), to, true]];
+    if (q.subject) fields.push([T('f.subject'), q.subject]);
+    if (q.body) fields.push([T('f.text'), q.body]);
+    return { type: T('type.email'), fields, actions: [
+      { label: T('a.writeEmail'), href: t, primary: true },
+      { label: T('a.copyAddr'), copy: to },
     ] };
   }
   if (/^MATMSG:/i.test(t)) {
     const g = (k) => { const m = t.match(new RegExp(k + ':((?:\\\\.|[^;])*);', 'i')); return m ? m[1] : ''; };
     const to = g('TO'), sub = g('SUB'), body = g('BODY');
     const href = 'mailto:' + to + '?subject=' + encodeURIComponent(sub) + '&body=' + encodeURIComponent(body);
-    return { type: 'E-Mail', fields: [['An', to, true], ['Betreff', sub], ['Text', body]].filter((f) => f[1]),
-      actions: [{ label: 'E-Mail schreiben', href, primary: true }, { label: 'Adresse kopieren', copy: to }] };
+    return { type: T('type.email'), fields: [[T('f.to'), to, true], [T('f.subject'), sub], [T('f.text'), body]].filter((f) => f[1]),
+      actions: [{ label: T('a.writeEmail'), href, primary: true }, { label: T('a.copyAddr'), copy: to }] };
   }
 
   if (scheme === 'tel') {
     const num = decodeURIComponent(t.slice(4));
-    return { type: 'Telefonnummer', fields: [['Nummer', num, true]], actions: [
-      { label: 'Anrufen', href: t, primary: true }, { label: 'Nummer kopieren', copy: num },
+    return { type: T('type.phone'), fields: [[T('f.number'), num, true]], actions: [
+      { label: T('a.call'), href: t, primary: true }, { label: T('a.copyNumber'), copy: num },
     ] };
   }
   if (scheme === 'sms' || scheme === 'smsto') {
     const rest = t.slice(scheme.length + 1);
     const [num, body] = scheme === 'smsto' ? rest.split(/:(.*)/) : [rest.split('?')[0], parseQuery(rest.split('?')[1] || '').body || ''];
     const href = 'sms:' + num + (body ? (isApple ? '&' : '?') + 'body=' + encodeURIComponent(body) : '');
-    return { type: 'SMS', fields: [['Nummer', num, true], ['Text', body]].filter((f) => f[1]), actions: [
-      { label: 'Nachricht schreiben', href, primary: true }, { label: 'Nummer kopieren', copy: num },
+    return { type: T('type.sms'), fields: [[T('f.number'), num, true], [T('f.text'), body]].filter((f) => f[1]), actions: [
+      { label: T('a.writeSms'), href, primary: true }, { label: T('a.copyNumber'), copy: num },
     ] };
   }
 
@@ -363,9 +361,9 @@ function interpret(text) {
     const m = t.match(/^geo:(-?[\d.]+),(-?[\d.]+)(?:[;,][^?]*)?(?:\?(.*))?$/i);
     if (m) {
       const q = parseQuery(m[3] || '');
-      return { type: 'Ort', fields: [['Koordinaten', m[1] + ', ' + m[2], true], q.q ? ['Suche', q.q] : null].filter(Boolean), actions: [
-        { label: 'Karte öffnen', href: mapsHref(m[1], m[2], q.q), external: true, primary: true },
-        { label: 'Koordinaten kopieren', copy: m[1] + ',' + m[2] },
+      return { type: T('type.place'), fields: [[T('f.coords'), m[1] + ', ' + m[2], true], q.q ? [T('f.search'), q.q] : null].filter(Boolean), actions: [
+        { label: T('a.openMap'), href: mapsHref(m[1], m[2], q.q), external: true, primary: true },
+        { label: T('a.copyCoords'), copy: m[1] + ',' + m[2] },
       ] };
     }
   }
@@ -374,47 +372,46 @@ function interpret(text) {
     let vcf = t, name;
     if (/^MECARD:/i.test(t)) ({ vcf, name } = mecardToVcard(t));
     else name = vcardField(vcf, 'FN') || vcardField(vcf, 'N').replace(/;/g, ' ').trim();
-    const fields = [['Name', name || '—']];
+    const fields = [[T('f.name'), name || '—']];
     const tel = vcardField(vcf, 'TEL'), mail = vcardField(vcf, 'EMAIL'), org = vcardField(vcf, 'ORG'), url = vcardField(vcf, 'URL');
-    if (org) fields.push(['Organisation', org]);
-    if (tel) fields.push(['Telefon', tel, true]);
-    if (mail) fields.push(['E-Mail', mail, true]);
-    if (url) fields.push(['Web', url, true]);
-    const actions = [{ label: 'Zu Kontakten hinzufügen', download: (name || 'kontakt').replace(/[^\w.-]+/g, '_') + '.vcf',
-      blob: new Blob([vcf], { type: 'text/vcard' }), primary: true,
-      hint: 'Lädt eine .vcf-Datei — Öffnen fügt den Kontakt in Kontakte/Outlook ein.' }];
-    if (tel) actions.push({ label: 'Telefon kopieren', copy: tel });
-    if (mail) actions.push({ label: 'E-Mail kopieren', copy: mail });
-    return { type: 'Kontakt', fields, actions };
+    if (org) fields.push([T('f.org'), org]);
+    if (tel) fields.push([T('f.phone'), tel, true]);
+    if (mail) fields.push([T('f.email'), mail, true]);
+    if (url) fields.push([T('f.web'), url, true]);
+    const actions = [{ label: T('a.addContact'), download: (name || 'contact').replace(/[^\p{L}\p{N}.-]+/gu, '_') + '.vcf',
+      blob: new Blob([vcf], { type: 'text/vcard' }), primary: true, hint: T('a.contactHint') }];
+    if (tel) actions.push({ label: T('a.copyPhone'), copy: tel });
+    if (mail) actions.push({ label: T('a.copyEmail'), copy: mail });
+    return { type: T('type.contact'), fields, actions };
   }
 
   if (/^BEGIN:VEVENT/im.test(t) || /^BEGIN:VCALENDAR/im.test(t)) {
     let ics = t;
     if (!/^BEGIN:VCALENDAR/im.test(ics)) ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//tools.martuni.de//QR//DE\r\n' + ics + '\r\nEND:VCALENDAR';
-    const fields = [['Titel', vcardField(t, 'SUMMARY') || '—'], ['Beginn', fmtIcsDate(vcardField(t, 'DTSTART'))]];
-    const end = vcardField(t, 'DTEND'); if (end) fields.push(['Ende', fmtIcsDate(end)]);
-    const loc = vcardField(t, 'LOCATION'); if (loc) fields.push(['Ort', loc]);
-    return { type: 'Termin', fields, actions: [
-      { label: 'In Kalender übernehmen', download: 'termin.ics', blob: new Blob([ics], { type: 'text/calendar' }), primary: true,
-        hint: 'Lädt eine .ics-Datei — Öffnen legt den Termin im Kalender an.' },
+    const fields = [[T('f.title'), vcardField(t, 'SUMMARY') || '—'], [T('f.begin'), fmtIcsDate(vcardField(t, 'DTSTART'))]];
+    const end = vcardField(t, 'DTEND'); if (end) fields.push([T('f.end'), fmtIcsDate(end)]);
+    const loc = vcardField(t, 'LOCATION'); if (loc) fields.push([T('f.location'), loc]);
+    return { type: T('type.event'), fields, actions: [
+      { label: T('a.addCalendar'), download: 'event.ics', blob: new Blob([ics], { type: 'text/calendar' }), primary: true,
+        hint: T('a.calendarHint') },
     ] };
   }
 
   if (scheme && !DANGEROUS.test(t)) {
-    return { type: 'App-Link (' + scheme + ':)', fields: [['Inhalt', t, true]],
-      note: 'Unbekanntes Schema — „Mit App öffnen" reicht die Adresse ans System weiter; eine passende App muss installiert sein.',
-      actions: [{ label: 'Mit App öffnen', href: t, primary: true }, { label: 'Kopieren', copy: t }] };
+    return { type: T('type.app', { scheme }), fields: [[T('f.content'), t, true]],
+      note: T('n.unknownScheme'),
+      actions: [{ label: T('a.openApp'), href: t, primary: true }, { label: T('copy'), copy: t }] };
   }
 
   if (/^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(t) && !/\s/.test(t)) {
-    return { type: 'Adresse ohne https://', fields: [['Adresse', t, true]], actions: [
-      { label: 'Öffnen', href: 'https://' + t, external: true, primary: true }, { label: 'Kopieren', copy: t },
+    return { type: T('type.bareUrl'), fields: [[T('f.address'), t, true]], actions: [
+      { label: T('a.open'), href: 'https://' + t, external: true, primary: true }, { label: T('copy'), copy: t },
     ] };
   }
 
   const isNum = /^\d{6,}$/.test(t);
-  return { type: isNum ? 'Zahl / Code' : 'Text', fields: [['Inhalt', t, isNum]],
-    actions: [{ label: 'Kopieren', copy: t, primary: true }] };
+  return { type: T(isNum ? 'type.number' : 'type.text'), fields: [[T('f.content'), t, isNum]],
+    actions: [{ label: T('copy'), copy: t, primary: true }] };
 }
 
 /* ---------- Ergebnis anzeigen ---------- */
@@ -425,7 +422,9 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
+let lastShown = null; // { text, ts } — für Neuaufbau beim Sprachwechsel
 function showResult(text, ts, addToHistory) {
+  lastShown = { text, ts };
   const r = interpret(text);
   $('empty').hidden = true;
   $('result').hidden = false;
@@ -433,7 +432,7 @@ function showResult(text, ts, addToHistory) {
   $('res-when').textContent = fmtDateTime(ts);
   const body = $('res-body');
   body.innerHTML = '';
-  if (r.note) body.append(el('div', { class: 'alert ' + (/^Achtung/.test(r.note) ? 'alert-warn' : 'alert-info'), html: ICONS.info }, el('span', {}, r.note)));
+  if (r.note) body.append(el('div', { class: 'alert ' + (r.warn ? 'alert-warn' : 'alert-info'), html: ICONS.info }, el('span', {}, r.note)));
   const dl = el('dl', { class: 'kv' });
   for (const [k, v, mono] of r.fields) {
     dl.append(el('dt', {}, k), el('dd', { class: mono ? 'mono' : '' }, v));
@@ -446,17 +445,18 @@ function showResult(text, ts, addToHistory) {
     let node;
     if (a.href) node = el('a', { class: cls, href: a.href, target: a.external ? '_blank' : null, rel: a.external ? 'noopener noreferrer' : null }, a.label);
     else if (a.blob) node = el('button', { class: cls, type: 'button', onclick: () => download(a.blob, a.download) }, a.label);
-    else node = el('button', { class: cls, type: 'button', onclick: () => copyText(a.copy, a.label.replace(/ kopieren$/, '') + ' kopiert') }, a.label);
+    else node = el('button', { class: cls, type: 'button', onclick: () => copyText(a.copy) }, a.label);
     if (a.hint) node.title = a.hint;
     acts.append(node);
   }
   acts.append(el('span', { class: 'topbar-spacer' }),
-    el('a', { class: 'btn btn-outline', href: '/qr?text=' + encodeURIComponent(text), title: 'Diesen Inhalt als neuen QR-Code erzeugen' }, 'Als QR erstellen'));
+    el('a', { class: 'btn btn-outline', href: '/qr?text=' + encodeURIComponent(text), title: t('scan.asQrTitle') }, t('scan.asQr')));
   $('res-raw').textContent = text;
   const raw = $('res-raw').parentElement;
   let copyRaw = raw.querySelector('.btn');
-  if (!copyRaw) { copyRaw = el('button', { class: 'btn btn-outline', type: 'button', onclick: () => copyText(text, 'Rohinhalt kopiert') }, 'Rohinhalt kopieren'); raw.append(copyRaw); }
-  else copyRaw.onclick = () => copyText(text, 'Rohinhalt kopiert');
+  if (!copyRaw) { copyRaw = el('button', { class: 'btn btn-outline', type: 'button' }, ''); raw.append(copyRaw); }
+  copyRaw.textContent = t('scan.rawCopy');
+  copyRaw.onclick = () => copyText(text);
 
   if (addToHistory) {
     history = [{ text, ts }, ...history.filter((h) => h.text !== text)].slice(0, 8);
@@ -479,16 +479,16 @@ function renderHistory() {
 
 /* ---------- Verdrahtung ---------- */
 $('btn-start').addEventListener('click', () => startCamera(localStorage.getItem(LS_CAM) || undefined));
-$('btn-stop').addEventListener('click', () => { stopCamera(); showIdle('Kamera starten', ''); });
+$('btn-stop').addEventListener('click', () => { stopCamera(); showIdle('scan.start', ''); });
 $('camera').addEventListener('change', () => startCamera($('camera').value));
 $('btn-torch').addEventListener('click', async () => {
   if (!track) return;
   const on = $('btn-torch').dataset.on !== '1';
   try { await track.applyConstraints({ advanced: [{ torch: on }] }); $('btn-torch').dataset.on = on ? '1' : ''; }
-  catch (e) { toast('Licht nicht verfügbar'); }
+  catch (e) { toast(t('scan.torchNA')); }
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { wasScanning = scanning; if (scanning) { stopCamera(); showIdle('Kamera starten', ''); } }
+  if (document.hidden) { wasScanning = scanning; if (scanning) { stopCamera(); showIdle('scan.start', ''); } }
   else if (wasScanning) { wasScanning = false; startCamera(localStorage.getItem(LS_CAM) || undefined); }
 });
 
@@ -496,6 +496,14 @@ document.addEventListener('visibilitychange', () => {
   try { history = JSON.parse(sessionStorage.getItem(SS_HIST) || '[]'); } catch (e) { history = []; }
   renderHistory();
   try { await initDecoder(); }
-  catch (e) { showIdle('Kamera starten', 'Decoder konnte nicht geladen werden: ' + e.message); return; }
+  catch (e) { showIdle('scan.start', t('scan.decoderFail', { msg: e.message })); return; }
   startCamera(localStorage.getItem(LS_CAM) || undefined);
 })();
+
+// Sprachwechsel: dynamisch erzeugte Texte neu aufbauen
+document.addEventListener('langchange', () => {
+  showEngine();
+  $('btn-start').textContent = t(idleBtnKey);
+  renderHistory();
+  if (lastShown && !$('result').hidden) showResult(lastShown.text, lastShown.ts, false);
+});

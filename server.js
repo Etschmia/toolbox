@@ -105,7 +105,7 @@ function readBody(req, res, cb) {
   req.on('data', (c) => {
     size += c.length;
     if (size > MAX_BODY) {
-      sendJson(res, 413, { error: 'Zu groß (max. 256 KB)' });
+      sendJson(res, 413, { error: 'Zu groß (max. 256 KB)', code: 'too_large' });
       req.destroy();
       return;
     }
@@ -115,7 +115,7 @@ function readBody(req, res, cb) {
     if (res.writableEnded) return;
     let payload;
     try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || 'null'); } catch (e) {
-      return sendJson(res, 400, { error: 'Ungültiges JSON' });
+      return sendJson(res, 400, { error: 'Ungültiges JSON', code: 'bad_json' });
     }
     cb(payload);
   });
@@ -128,17 +128,17 @@ function handleApi(req, res) {
 
   // POST /api/secret — Chiffrat ablegen
   if (req.method === 'POST' && url === '/api/secret') {
-    if (rateLimited(clientIp(req))) return sendJson(res, 429, { error: 'Zu viele Anfragen — später erneut versuchen' });
+    if (rateLimited(clientIp(req))) return sendJson(res, 429, { error: 'Zu viele Anfragen — später erneut versuchen', code: 'rate_limited' });
     return readBody(req, res, (p) => {
       if (!p || typeof p.ct !== 'string' || typeof p.iv !== 'string' || !B64.test(p.ct) || !B64.test(p.iv)) {
-        return sendJson(res, 400, { error: 'Erwartet: { ct, iv, mode, hours? }' });
+        return sendJson(res, 400, { error: 'Erwartet: { ct, iv, mode, hours? }', code: 'bad_payload' });
       }
       const mode = p.mode === 'hours' ? 'hours' : 'once';
       let hours = 0;
       if (mode === 'hours') {
         hours = Number(p.hours);
         if (!Number.isFinite(hours) || hours < 0.25 || hours > MAX_HOURS) {
-          return sendJson(res, 400, { error: `Frist zwischen 0,25 und ${MAX_HOURS} Stunden` });
+          return sendJson(res, 400, { error: `Frist zwischen 0,25 und ${MAX_HOURS} Stunden`, code: 'bad_hours', params: { max: MAX_HOURS } });
         }
       }
       const id = newId();
@@ -163,7 +163,7 @@ function handleApi(req, res) {
   let m = req.method === 'GET' && url.match(/^\/api\/secret\/([A-Za-z0-9]{12})$/);
   if (m) {
     const rec = liveRecord(m[1]);
-    if (!rec) return sendJson(res, 404, { error: 'Unbekannt, abgelaufen oder bereits gelesen' });
+    if (!rec) return sendJson(res, 404, { error: 'Unbekannt, abgelaufen oder bereits gelesen', code: 'gone' });
     return sendJson(res, 200, {
       mode: rec.mode, hours: rec.hours, pass: rec.pass,
       opened: !!rec.firstRead, expiresAt: rec.expiresAt,
@@ -176,7 +176,7 @@ function handleApi(req, res) {
   if (m) {
     const id = m[1];
     const rec = liveRecord(id);
-    if (!rec) return sendJson(res, 404, { error: 'Unbekannt, abgelaufen oder bereits gelesen' });
+    if (!rec) return sendJson(res, 404, { error: 'Unbekannt, abgelaufen oder bereits gelesen', code: 'gone' });
     if (rec.mode === 'once') {
       burn(id);
     } else if (!rec.firstRead) {
@@ -198,24 +198,24 @@ function handleApi(req, res) {
 
   // POST /api/short { url, key, code? } — anlegen (nur mit Schlüssel)
   if (req.method === 'POST' && url === '/api/short') {
-    if (rateLimited(clientIp(req))) return sendJson(res, 429, { error: 'Zu viele Anfragen' });
+    if (rateLimited(clientIp(req))) return sendJson(res, 429, { error: 'Zu viele Anfragen', code: 'rate_limited' });
     return readBody(req, res, (p) => {
       if (!TOOLS_KEY || !p || typeof p.key !== 'string' ||
           p.key.length !== TOOLS_KEY.length ||
           !crypto.timingSafeEqual(Buffer.from(p.key), Buffer.from(TOOLS_KEY))) {
-        return sendJson(res, 403, { error: 'Schlüssel fehlt oder ist falsch' });
+        return sendJson(res, 403, { error: 'Schlüssel fehlt oder ist falsch', code: 'bad_key' });
       }
       let target;
       try { target = new URL(String(p.url)); } catch (e) { target = null; }
       if (!target || !/^https?:$/.test(target.protocol) || String(p.url).length > 4096) {
-        return sendJson(res, 400, { error: 'Bitte eine http(s)-Adresse angeben' });
+        return sendJson(res, 400, { error: 'Bitte eine http(s)-Adresse angeben', code: 'bad_url' });
       }
       let code = newId(6);
       if (p.code) {
-        if (!/^[A-Za-z0-9_-]{3,32}$/.test(p.code)) return sendJson(res, 400, { error: 'Wunschkürzel: 3–32 Zeichen, a–z A–Z 0–9 _ -' });
+        if (!/^[A-Za-z0-9_-]{3,32}$/.test(p.code)) return sendJson(res, 400, { error: 'Wunschkürzel: 3–32 Zeichen, a–z A–Z 0–9 _ -', code: 'bad_code' });
         if (['s', 'qr', 'scan', 'secret', 'short', 'api', 'design', 'index'].includes(p.code.toLowerCase()) ||
             fs.existsSync(path.join(SHORT_DIR, p.code + '.json'))) {
-          return sendJson(res, 409, { error: 'Kürzel ist schon vergeben' });
+          return sendJson(res, 409, { error: 'Kürzel ist schon vergeben', code: 'code_taken' });
         }
         code = p.code;
       }
@@ -229,7 +229,7 @@ function handleApi(req, res) {
   m = req.method === 'GET' && url.match(/^\/api\/short\/([A-Za-z0-9_-]{3,32})$/);
   if (m) {
     const rec = readShort(m[1]);
-    if (!rec) return sendJson(res, 404, { error: 'Unbekanntes Kürzel' });
+    if (!rec) return sendJson(res, 404, { error: 'Unbekanntes Kürzel', code: 'unknown_code' });
     return sendJson(res, 200, rec);
   }
 

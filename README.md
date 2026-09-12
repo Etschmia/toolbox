@@ -26,12 +26,20 @@ Link-Formate: Geheimnisse `/s/<12 Zeichen>#<key>`, Kurzlinks `/<3–32 Zeichen>`
    startet die Frist. Entschlüsselung im Browser.
 4. Caddy-Log enthält nur `/s/<id>` (nie das Fragment); `Referrer-Policy: no-referrer`.
 
+## Sprachen
+
+Die Oberfläche gibt es auf Deutsch, Englisch, Armenisch und Russisch — Umschalter in der
+Menüleiste neben dem Theme-Knopf. Voreinstellung: zuletzt gewählte Sprache (`localStorage`),
+sonst Browser-Sprache, sonst Deutsch. Alle Texte liegen in `public/i18n.js`; statische Texte
+in den HTML-Seiten werden über `data-i18n`-Attribute befüllt, dynamische über `t()`/`tn()`.
+Server-Fehler tragen einen `code`, den der Browser übersetzt (`error` bleibt als Fallback).
+
 ## Technik
 
 - `server.js` — Node ≥ 20 ohne Abhängigkeiten, Port 8341. API + Kurzlink-Redirects,
   lokal auch statischer Server. Rate-Limit fürs Anlegen (60/h pro IP), Aufräumen alle 15 min.
 - `public/` — Seiten `index`, `qr`, `scan`, `secret`, `open` (`/s/*`), `short`;
-  `common.js` (Topbar/Theme/Toast/Clipboard), `crypto.js`, `lib/qrcode.js`
+  `common.js` (Topbar/Theme/Toast/Clipboard), `i18n.js` (Übersetzungen), `crypto.js`, `lib/qrcode.js`
   (Kazuhiko Arase, MIT), `lib/jsQR.js` (Cosmo Wolfe, Apache-2.0; nur geladen,
   wenn der Browser keinen `BarcodeDetector` hat, z. B. Firefox).
 - `design/` — Kopie der Depot-Tokens (Quelle: `notes/design`).

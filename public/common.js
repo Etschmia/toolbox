@@ -15,24 +15,30 @@ const ICONS = {
 };
 
 const PAGES = [
-  { href: '/qr', label: 'QR erstellen' },
-  { href: '/scan', label: 'QR scannen' },
-  { href: '/secret', label: 'Geheimnis' },
-  { href: '/short', label: 'Kurzlink' },
+  { href: '/qr', key: 'nav.qr' },
+  { href: '/scan', key: 'nav.scan' },
+  { href: '/secret', key: 'nav.secret' },
+  { href: '/short', key: 'nav.short' },
 ];
 
-function buildTopbar(crumb) {
+/* Menüleiste aufbauen; `crumbKey` ist ein i18n-Schlüssel (z. B. 'nav.qr').
+   Befüllt anschließend alle data-i18n-Texte der Seite. */
+function buildTopbar(crumbKey) {
   const path = location.pathname.replace(/\/$/, '') || '/';
   const bar = document.createElement('header');
   bar.className = 'topbar';
   bar.innerHTML =
     `<a class="brand" href="/">${ICONS.logo}Toolbox</a>` +
-    (crumb ? `<span class="crumb">${crumb}</span>` : '') +
+    (crumbKey ? `<span class="crumb" data-i18n="${crumbKey}"></span>` : '') +
     '<div class="topbar-spacer"></div>' +
     '<nav class="topnav">' + PAGES.map((p) =>
-      `<a href="${p.href}"${path === p.href ? ' aria-current="page"' : ''}>${p.label}</a>`).join('') + '</nav>' +
-    `<button class="icon-btn" id="btn-theme" title="Hell / Dunkel umschalten">${ICONS.moon}${ICONS.sun}</button>`;
+      `<a href="${p.href}"${path === p.href ? ' aria-current="page"' : ''} data-i18n="${p.key}"></a>`).join('') + '</nav>' +
+    '<select class="lang-select" data-i18n-aria="language" data-i18n-title="language">' +
+      I18N.LANGS.map((l) => `<option value="${l}" lang="${l}">${I18N.NAMES[l]}</option>`).join('') + '</select>' +
+    `<button class="icon-btn" id="btn-theme" data-i18n-title="theme">${ICONS.moon}${ICONS.sun}</button>`;
   document.body.prepend(bar);
+  bar.querySelector('.lang-select').addEventListener('change', (e) => I18N.set(e.target.value));
+  I18N.apply();
   bar.querySelector('#btn-theme').addEventListener('click', () => {
     const dark = document.documentElement.dataset.theme === 'dark';
     if (dark) { delete document.documentElement.dataset.theme; localStorage.setItem(LS_THEME, 'light'); }
@@ -57,7 +63,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-async function copyText(text, msg = 'Kopiert') {
+async function copyText(text, msg = t('copied')) {
   try {
     await navigator.clipboard.writeText(text);
     toast(msg);
@@ -69,7 +75,7 @@ async function copyText(text, msg = 'Kopiert') {
     document.body.append(ta); ta.select();
     const ok = document.execCommand('copy');
     ta.remove();
-    toast(ok ? msg : 'Kopieren nicht möglich');
+    toast(ok ? msg : t('copyFail'));
     return ok;
   }
 }
@@ -102,5 +108,11 @@ const b64u = {
 };
 
 function fmtDateTime(ms) {
-  return new Date(ms).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(ms).toLocaleString(I18N.locale, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/* Fehlermeldung aus einer fetch-Antwort (Body als JSON, kann fehlen) */
+async function apiError(r) {
+  const j = await r.json().catch(() => ({}));
+  return I18N.apiError(j, r.status);
 }

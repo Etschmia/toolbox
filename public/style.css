@@ -37,6 +37,14 @@ body { display: flex; flex-direction: column; min-height: 100vh; }
 }
 .icon-btn:hover { background: color-mix(in oklab, var(--foreground) 8%, transparent); }
 .icon-btn svg { width: 17px; height: 17px; }
+/* Sprachumschalter in der Menüleiste */
+.lang-select {
+  width: auto; height: 32px; padding: 0 26px 0 10px; font-size: 13px; font-weight: 600;
+  background: var(--card) no-repeat right 8px center / 12px
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  border-color: var(--border); cursor: pointer; appearance: none;
+}
+.lang-select:hover { background-color: var(--muted); }
 #btn-theme .ic-sun { display: none; }
 [data-theme="dark"] #btn-theme .ic-sun { display: block; }
 [data-theme="dark"] #btn-theme .ic-moon { display: none; }
