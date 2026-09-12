@@ -213,7 +213,7 @@ function handleApi(req, res) {
       let code = newId(6);
       if (p.code) {
         if (!/^[A-Za-z0-9_-]{3,32}$/.test(p.code)) return sendJson(res, 400, { error: 'Wunschkürzel: 3–32 Zeichen, a–z A–Z 0–9 _ -' });
-        if (['s', 'qr', 'secret', 'short', 'api', 'design', 'index'].includes(p.code.toLowerCase()) ||
+        if (['s', 'qr', 'scan', 'secret', 'short', 'api', 'design', 'index'].includes(p.code.toLowerCase()) ||
             fs.existsSync(path.join(SHORT_DIR, p.code + '.json'))) {
           return sendJson(res, 409, { error: 'Kürzel ist schon vergeben' });
         }

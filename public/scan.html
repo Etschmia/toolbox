@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<title>QR scannen · Toolbox</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/design/tokens.css?v=1">
+<link rel="stylesheet" href="/style.css?v=2">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='10' y='10' width='80' height='80' rx='20' fill='%2325a37a'/%3E%3Cpath d='M30 70 60 40M58 30l12 12' stroke='%23fff' stroke-width='9' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+</head>
+<body>
+<main class="page">
+  <h1>QR scannen</h1>
+  <p class="lead">Kamera vor den Code halten — oder einen Screenshot einfügen (Strg/⌘ V), hierher ziehen oder auswählen. Alles wird lokal im Browser ausgewertet.</p>
+
+  <div class="scan-layout">
+    <div>
+      <div class="viewfinder" id="viewfinder">
+        <video id="video" playsinline muted autoplay></video>
+        <canvas id="work" hidden></canvas>
+        <div class="vf-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="vf-status" id="vf-status">Kamera wird gestartet …</div>
+        <div class="vf-idle" id="vf-idle" hidden>
+          <button class="btn btn-primary btn-lg" id="btn-start">Kamera starten</button>
+          <p class="hint" id="vf-idle-hint"></p>
+        </div>
+      </div>
+      <div class="btn-row scan-controls">
+        <button class="btn btn-outline" id="btn-stop">Kamera stoppen</button>
+        <select id="camera" class="camera-select" hidden aria-label="Kamera wählen"></select>
+        <button class="btn btn-outline" id="btn-torch" hidden>Licht</button>
+        <span class="topbar-spacer"></span>
+        <label class="btn btn-outline" for="file">Bild wählen …<input type="file" id="file" accept="image/*" hidden></label>
+      </div>
+      <p class="hint scan-engine" id="engine"></p>
+    </div>
+
+    <aside class="scan-side">
+      <div class="card scan-result" id="result" hidden>
+        <div class="scan-result-head">
+          <span class="badge" id="res-type">Text</span>
+          <span class="hint" id="res-when"></span>
+        </div>
+        <div class="scan-result-body" id="res-body"></div>
+        <div class="btn-row" id="res-actions"></div>
+        <details class="scan-raw">
+          <summary>Rohinhalt</summary>
+          <pre class="secret-box" id="res-raw"></pre>
+        </details>
+      </div>
+      <div class="card scan-empty" id="empty">
+        <p class="hint">Noch nichts gescannt.</p>
+        <p class="hint">Tipp auf dem MacBook: Screenshot mit <span class="mono">⌘ ⇧ 4</span> in die Zwischenablage (Ctrl gedrückt halten), dann hier <span class="mono">⌘ V</span>.</p>
+      </div>
+      <div class="card" id="history-card" hidden>
+        <h2>Zuletzt gescannt</h2>
+        <ul class="scan-history" id="history"></ul>
+      </div>
+    </aside>
+  </div>
+</main>
+<footer class="foot">tools.martuni.de</footer>
+<script src="/common.js?v=2"></script>
+<script src="/scan.js?v=1"></script>
+</body>
+</html>

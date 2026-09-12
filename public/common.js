@@ -15,7 +15,8 @@ const ICONS = {
 };
 
 const PAGES = [
-  { href: '/qr', label: 'QR-Code' },
+  { href: '/qr', label: 'QR erstellen' },
+  { href: '/scan', label: 'QR scannen' },
   { href: '/secret', label: 'Geheimnis' },
   { href: '/short', label: 'Kurzlink' },
 ];

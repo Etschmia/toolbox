@@ -1,7 +1,7 @@
 /* QR-Code-Generator — rein clientseitig (lib/qrcode.js, Kazuhiko Arase, MIT). */
 'use strict';
 
-buildTopbar('QR-Code');
+buildTopbar('QR erstellen');
 qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 
 const $ = (id) => document.getElementById(id);

@@ -8,7 +8,8 @@ dependency-freier Node-Server, Caddy davor, Depot Design System).
 
 | Pfad | Was | Server nötig? |
 |---|---|---|
-| `/qr` | QR-Code aus Text/URL, Bitcoin-URI (BIP-21) oder WLAN-Zugang. Export: PNG in die Zwischenablage, PNG-/SVG-Download. | nein — läuft komplett lokal |
+| `/qr` | **QR erstellen** aus Text/URL, Bitcoin-URI (BIP-21) oder WLAN-Zugang. Export: PNG in die Zwischenablage, PNG-/SVG-Download. | nein — läuft komplett lokal |
+| `/scan` | **QR scannen** per Kamera (Frontkamera gespiegelt, Kamerawahl, Taschenlampe wenn vorhanden), aus Datei, per Einfügen (Strg/⌘ V) oder Drag & Drop. Erkennt Link, otpauth (2FA → Passwort-App), WLAN, Bitcoin/Lightning, mailto/tel/sms, geo, vCard/MECARD (→ .vcf), vEvent (→ .ics), sonstige App-Schemata; `javascript:`/`data:` werden nie verlinkt. Decoder: nativer `BarcodeDetector`, sonst `lib/jsQR.js`. | nein — läuft komplett lokal |
 | `/secret` | Geheimnis (Passwort, Text) als selbstvernichtender Link. **Ende-zu-Ende verschlüsselt** (AES-256-GCM im Browser); der Schlüssel steht im URL-Fragment `#…`, das der Browser nie an den Server schickt. Modi: *sofort nach erstem Lesen* oder *N Stunden nach erstem Lesen*; ungeöffnet 7 Tage. Optional zusätzliche Passphrase (PBKDF2, 300k Runden). | ja — speichert nur Chiffrat |
 | `/short` | Kurzlinks `tools.martuni.de/<code>`. **Anlegen nur mit Schlüssel** (`TOOLS_KEY` in `.env`), damit der Dienst nicht als Spam-/Phishing-Weiche missbraucht wird. Auflösen ist offen; Aufrufzähler per `/api/short/<code>`. | ja |
 
@@ -29,9 +30,10 @@ Link-Formate: Geheimnisse `/s/<12 Zeichen>#<key>`, Kurzlinks `/<3–32 Zeichen>`
 
 - `server.js` — Node ≥ 20 ohne Abhängigkeiten, Port 8341. API + Kurzlink-Redirects,
   lokal auch statischer Server. Rate-Limit fürs Anlegen (60/h pro IP), Aufräumen alle 15 min.
-- `public/` — Seiten `index`, `qr`, `secret`, `open` (`/s/*`), `short`;
+- `public/` — Seiten `index`, `qr`, `scan`, `secret`, `open` (`/s/*`), `short`;
   `common.js` (Topbar/Theme/Toast/Clipboard), `crypto.js`, `lib/qrcode.js`
-  (Kazuhiko Arase, MIT).
+  (Kazuhiko Arase, MIT), `lib/jsQR.js` (Cosmo Wolfe, Apache-2.0; nur geladen,
+  wenn der Browser keinen `BarcodeDetector` hat, z. B. Firefox).
 - `design/` — Kopie der Depot-Tokens (Quelle: `notes/design`).
 - `.env` — `TOOLS_KEY=…` (nicht im Repo; wird von der systemd-Unit geladen).
 
